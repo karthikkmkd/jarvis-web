@@ -1,0 +1,377 @@
+
+<!DOCTYPE html> <html lang="en"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, 
+initial-scale=1.0"> <meta name="theme-color" content="#030914"> <title>JARVIS | Stark Industries</title> <style>
+:root {
+    --cyan: #00eaff; --blue: #008cff; --bg: #030914; --panel: rgba(8, 25, 44, .85); --line: rgba(0, 234, 255, .25);
+}
+* { box-sizing: border-box;
+}
+body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at 50% 35%, #102b43 0%, #030914 65%); color: 
+    #d9faff;
+    font-family: "Segoe UI", Arial, sans-serif; overflow-x: hidden;
+}
+body::before { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .18; background-image: 
+        linear-gradient(rgba(0,234,255,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(0,234,255,.12) 1px, 
+        transparent 1px);
+    background-size: 35px 35px;
+}
+header { display: flex; justify-content: space-between; align-items: center; padding: 17px 22px; border-bottom: 1px solid 
+    var(--line); background: rgba(2, 10, 22, .8); position: relative; z-index: 2;
+}
+.brand { font-size: 20px; letter-spacing: 5px; color: var(--cyan); font-weight: 700; text-shadow: 0 0 15px var(--cyan);
+}
+.brand small { display: block; font-size: 9px; letter-spacing: 3px; margin-top: 5px; color: #6baec3;
+}
+.status { color: #00ffab; font-size: 11px; letter-spacing: 2px;
+}
+main { max-width: 1150px; margin: auto; padding: 22px 15px 40px;
+}
+.welcome { text-align: center; margin: 20px 0 5px;
+}
+.welcome h2 { font-weight: 300; letter-spacing: 7px; font-size: 24px; margin-bottom: 8px;
+}
+.welcome p { font-size: 11px; letter-spacing: 3px; color: #6c9caf;
+}
+.reactor-area { display: flex; justify-content: center; align-items: center; padding: 20px 0 25px;
+}
+.reactor { position: relative; width: 230px; height: 230px; display: flex; justify-content: center; align-items: center;
+}
+.ring { position: absolute; border-radius: 50%; border: 1px solid rgba(0,234,255,.6); box-shadow: 0 0 12px 
+    rgba(0,234,255,.25);
+}
+.ring.one { inset: 0; border-style: dashed; animation: spin 18s linear infinite;
+}
+.ring.two { inset: 15px; border-width: 3px; border-left-color: transparent; border-right-color: transparent; animation: 
+    reverseSpin 9s linear infinite;
+}
+.ring.three { inset: 32px; border-style: dotted; animation: spin 12s linear infinite;
+}
+.core { width: 105px; height: 105px; border-radius: 50%; background: radial-gradient(circle, white 0%, #64faff 15%, #008cff 
+    45%, #032c58 75%); box-shadow:
+        0 0 20px #00eaff, 0 0 50px #008cff, 0 0 85px rgba(0,234,255,.5); animation: pulse 2s ease-in-out infinite;
+}
+.reactor.active .core { box-shadow: 0 0 35px white, 0 0 75px #00eaff, 0 0 120px #008cff;
+}
+@keyframes spin { to { transform: rotate(360deg); }
+}
+@keyframes reverseSpin { to { transform: rotate(-360deg); }
+}
+@keyframes pulse { 50% { transform: scale(1.09); opacity: .8; }
+}
+.core-label { position: absolute; bottom: -20px; font-size: 9px; letter-spacing: 4px; color: var(--cyan);
+}
+.grid { display: grid; grid-template-columns: 1fr 1.5fr 1fr; gap: 14px; margin-top: 25px;
+}
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 17px; box-shadow: inset 0 0 
+    20px rgba(0,234,255,.035); backdrop-filter: blur(10px);
+}
+.panel h3 { font-size: 11px; letter-spacing: 3px; color: var(--cyan); margin: 0 0 18px;
+}
+.metric { padding: 10px 0; border-bottom: 1px solid rgba(0,234,255,.1); display: flex; justify-content: space-between; 
+    font-size: 12px;
+}
+.metric span:last-child { color: #00ffb3;
+}
+.chat { min-height: 250px; display: flex; flex-direction: column;
+}
+#messages {
+    flex: 1; min-height: 150px; max-height: 260px; overflow-y: auto; font-size: 13px; line-height: 1.6;
+}
+.message { margin: 10px 0; padding: 10px; border-left: 2px solid var(--cyan); background: rgba(0,234,255,.055); 
+    overflow-wrap: anywhere;
+}
+.message.user { border-left-color: #008cff; color: #b8d9ff;
+}
+.chat-input { display: flex; gap: 7px; margin-top: 12px;
+}
+input { min-width: 0; flex: 1; background: #061526; border: 1px solid var(--line); color: white; border-radius: 7px; padding: 
+    13px; outline: none;
+}
+input:focus { border-color: var(--cyan);
+}
+button { cursor: pointer; border: 1px solid var(--cyan); background: rgba(0,234,255,.08); color: var(--cyan); border-radius: 
+    7px; padding: 11px 14px; font-weight: bold;
+}
+button:active { background: var(--cyan); color: #00101c;
+}
+.controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin: 20px 0;
+}
+.controls button { min-width: 115px;
+}
+footer { text-align: center; padding: 22px 10px; color: #426c80; font-size: 10px; letter-spacing: 3px;
+}
+@media(max-width: 700px) { header { padding: 14px; } .brand { font-size: 17px; } .welcome h2 { font-size: 19px; } .grid { 
+    grid-template-columns: 1fr; } .reactor { width: 205px; height: 205px; } .chat { min-height: 280px; }
+}
+</style> </head> <body> <header> <div class="brand"> J.A.R.V.I.S <small>STARK INDUSTRIES</small> </div> <div class="controls" style="margin:0">
+<button id="loginBtn" onclick="login()">LOGIN</button>
+<button id="logoutBtn" onclick="logout()" hidden>LOGOUT</button>
+</div>
+<div class="status" 
+    id="systemStatus">
+        ● INITIALIZING </div> </header> <main> <section class="welcome"> <h2>GOOD EVENING, SIR</h2> <p>JUST A RATHER VERY 
+        INTELLIGENT SYSTEM</p>
+    </section> <section class="reactor-area"> <div class="reactor" id="reactor"> <div class="ring one"></div> <div 
+            class="ring two"></div> <div class="ring three"></div> <div class="core"></div> <div class="core-label">ARC 
+            REACTOR</div>
+        </div> </section> <div class="controls"> <button onclick="startVoice()">🎙 VOICE</button> <button 
+        onclick="toggleSpeech()">🔊 SPEECH</button> <button onclick="clearChat()">CLEAR</button>
+    </div> <section class="grid"> <div class="panel"> <h3>SYSTEM MONITOR</h3> <div class="metric"> <span>CORE</span> 
+                <span>ONLINE</span>
+            </div> <div class="metric"> <span>GEMINI AI</span> <span id="aiStatus">PENDING</span> </div> <div class="metric"> 
+                <span>MEMORY</span> <span id="memoryStatus">PENDING</span>
+            </div> <div class="metric"> <span>VOICE</span> <span id="voiceStatus">READY</span> </div> <div class="metric"> 
+                <span>SECURITY</span> <span>COGNITO</span>
+            </div> </div> <div class="panel chat"> <h3>JARVIS INTERFACE</h3> <div id="messages"> <div class="message"> 
+                    JARVIS: Good evening, Sir. All visual systems are operational. Awaiting your instructions.
+                </div> </div> <div class="chat-input"> <input id="message" type="text" placeholder="Ask JARVIS anything..." 
+                    onkeydown="if(event.key==='Enter') sendMessage()"
+                >
+                <button onclick="sendMessage()">➤</button> </div> </div> <div class="panel"> <h3>NETWORK STATUS</h3> <div 
+            class="metric">
+                <span>API GATEWAY</span> <span id="apiStatus">UNTESTED</span> </div> <div class="metric"> 
+                <span>COGNITO</span> <span id="authStatus">PENDING</span>
+            </div> <div class="metric"> <span>SUPABASE</span> <span id="dbStatus">PENDING</span> </div> <div class="metric"> 
+                <span>BACKEND</span> <span>READY TO TEST</span>
+            </div> </div> </section> </main> <footer> STARK INDUSTRIES © 2026 | JARVIS MARK VII </footer> <script> const 
+API_URL = "https://l1gy5oed6g.execute-api.ap-southeast-2.amazonaws.com/chat"; let accessToken = null; let speechEnabled = 
+true; const messages = document.getElementById("messages"); document.getElementById("systemStatus").textContent = "● INTERFACE ONLINE"; function addMessage(text, type = "jarvis") {
+    const div = document.createElement("div"); div.className = "message " + type; div.textContent = (type === "user" ? "YOU: " : "JARVIS: ") + text;
+    messages.appendChild(div); messages.scrollTop = messages.scrollHeight;
+}
+async function sendMessage() { const input = document.getElementById("message"); const message = input.value.trim(); if 
+    (!message) return; input.value = ""; addMessage(message, "user"); if (!accessToken) {
+        addMessage( "Sir, secure Cognito authentication has not been connected yet. Please complete the authentication configuration."
+        ); return;
+    }
+    try { document.getElementById("apiStatus").textContent = "CONNECTING"; const response = await fetch(API_URL, { method: 
+            "POST", headers: {
+                "Content-Type": "application/json", "Authorization": "Bearer " + accessToken
+            },
+            body: JSON.stringify({ message: message })
+        });
+        if (response.status === 401) { throw new Error("Authentication expired or token rejected.");
+        }
+        if (!response.ok) { throw new Error("Backend error: HTTP " + response.status);
+        }
+        const data = await response.json(); const reply = data.response || data.reply || data.message || "The backend responded, Sir.";
+        addMessage(reply); document.getElementById("apiStatus").textContent = "CONNECTED"; 
+        document.getElementById("aiStatus").textContent = "CONNECTED"; speak(reply);
+    } catch (error) {
+        document.getElementById("apiStatus").textContent = "ERROR"; addMessage(error.message);
+    }
+}
+function startVoice() { const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition; if 
+    (!SpeechRecognition) {
+        addMessage("Voice recognition is not supported in this browser. Please try Chrome."); return;
+    }
+    const recognition = new SpeechRecognition(); recognition.lang = "en-IN"; recognition.interimResults = false; 
+    document.getElementById("reactor").classList.add("active"); document.getElementById("voiceStatus").textContent = 
+    "LISTENING"; recognition.onresult = function(event) {
+        document.getElementById("message").value = event.results[0][0].transcript; sendMessage();
+    };
+    recognition.onerror = function() { addMessage("Voice recognition encountered an error.");
+    };
+    recognition.onend = function() { document.getElementById("reactor").classList.remove("active"); 
+        document.getElementById("voiceStatus").textContent = "READY";
+    };
+    recognition.start();
+}
+function speak(text) { if (!speechEnabled || !("speechSynthesis" in window)) return; speechSynthesis.cancel(); const 
+    utterance = new SpeechSynthesisUtterance(text); utterance.lang = "en-IN"; utterance.rate = 0.95; utterance.pitch = 0.9; 
+    speechSynthesis.speak(utterance);
+}
+function toggleSpeech() { speechEnabled = !speechEnabled; if (!speechEnabled && "speechSynthesis" in window) { 
+        speechSynthesis.cancel();
+    }
+    addMessage("Speech output " + (speechEnabled ? "enabled." : "disabled."));
+}
+function clearChat() { messages.innerHTML = ""; addMessage("Conversation display cleared, Sir.");
+}
+// ==========================================
+// JARVIS COGNITO AUTHENTICATION - PKCE
+// JARVIS 1 PUBLIC APP CLIENT
+// ==========================================
+
+const COGNITO_DOMAIN =
+    "https://ap-southeast-2igtyzbczv.auth.ap-southeast-2.amazoncognito.com";
+
+const COGNITO_CLIENT_ID = "17104eo51rq8a71ev9gn5ds3um";
+
+const COGNITO_REDIRECT_URI =
+    "https://d84l1y8p4kdic.cloudfront.net";
+
+const COGNITO_LOGOUT_URI = COGNITO_REDIRECT_URI;
+
+const PKCE_VERIFIER_KEY = "jarvis_pkce_verifier";
+const OAUTH_STATE_KEY = "jarvis_oauth_state";
+
+function randomSecureString() {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+
+    let binary = "";
+    bytes.forEach(byte => binary += String.fromCharCode(byte));
+
+    return btoa(binary)
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=/g, "");
+}
+
+async function createPKCEChallenge(verifier) {
+    const encoded = new TextEncoder().encode(verifier);
+    const digest = await crypto.subtle.digest("SHA-256", encoded);
+
+    let binary = "";
+    new Uint8Array(digest).forEach(
+        byte => binary += String.fromCharCode(byte)
+    );
+
+    return btoa(binary)
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=/g, "");
+}
+
+function updateAuthStatus(authenticated) {
+    document.getElementById("authStatus").textContent =
+        authenticated ? "AUTHENTICATED" : "NOT AUTHENTICATED";
+
+    document.getElementById("loginBtn").hidden = authenticated;
+    document.getElementById("logoutBtn").hidden = !authenticated;
+}
+
+async function login() {
+    try {
+        if (!window.crypto || !crypto.subtle) {
+            throw new Error("Secure browser cryptography is unavailable. Use HTTPS.");
+        }
+
+        const verifier = randomSecureString();
+        const challenge = await createPKCEChallenge(verifier);
+        const state = randomSecureString();
+
+        sessionStorage.setItem(PKCE_VERIFIER_KEY, verifier);
+        sessionStorage.setItem(OAUTH_STATE_KEY, state);
+
+        const params = new URLSearchParams({
+            response_type: "code",
+            client_id: COGNITO_CLIENT_ID,
+            redirect_uri: COGNITO_REDIRECT_URI,
+            scope: "openid email",
+            code_challenge_method: "S256",
+            code_challenge: challenge,
+            state: state
+        });
+
+        window.location.assign(
+            COGNITO_DOMAIN + "/oauth2/authorize?" + params.toString()
+        );
+
+    } catch (error) {
+        addMessage("LOGIN ERROR: " + error.message);
+    }
+}
+
+async function handleCognitoCallback() {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const returnedState = params.get("state");
+    const oauthError = params.get("error");
+
+    if (!code && !oauthError) return;
+
+    if (oauthError) {
+        sessionStorage.removeItem(PKCE_VERIFIER_KEY);
+        sessionStorage.removeItem(OAUTH_STATE_KEY);
+        history.replaceState({}, document.title, window.location.pathname);
+        addMessage("COGNITO ERROR: " + oauthError);
+        return;
+    }
+
+    const expectedState = sessionStorage.getItem(OAUTH_STATE_KEY);
+    const verifier = sessionStorage.getItem(PKCE_VERIFIER_KEY);
+
+    sessionStorage.removeItem(OAUTH_STATE_KEY);
+    sessionStorage.removeItem(PKCE_VERIFIER_KEY);
+
+    history.replaceState({}, document.title, window.location.pathname);
+
+    if (!code || !returnedState || !expectedState ||
+        returnedState !== expectedState || !verifier) {
+        addMessage("SECURITY ERROR: OAuth state verification failed.");
+        updateAuthStatus(false);
+        return;
+    }
+
+    try {
+        const body = new URLSearchParams({
+            grant_type: "authorization_code",
+            client_id: COGNITO_CLIENT_ID,
+            code: code,
+            redirect_uri: COGNITO_REDIRECT_URI,
+            code_verifier: verifier
+        });
+
+        const response = await fetch(COGNITO_DOMAIN + "/oauth2/token", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: body.toString()
+        });
+
+        const tokens = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                tokens.error_description || tokens.error ||
+                "Token exchange failed."
+            );
+        }
+
+        if (!tokens.access_token) {
+            throw new Error("Cognito did not return an access token.");
+        }
+
+        accessToken = tokens.access_token;
+
+        updateAuthStatus(true);
+
+        addMessage("Secure Cognito authentication successful, Sir.");
+
+        document.getElementById("systemStatus").textContent =
+            "● AUTHENTICATED";
+
+    } catch (error) {
+        accessToken = null;
+        updateAuthStatus(false);
+        addMessage("AUTHENTICATION FAILED: " + error.message);
+    }
+}
+
+function logout() {
+    accessToken = null;
+
+    sessionStorage.removeItem(PKCE_VERIFIER_KEY);
+    sessionStorage.removeItem(OAUTH_STATE_KEY);
+
+    updateAuthStatus(false);
+
+    const params = new URLSearchParams({
+        client_id: COGNITO_CLIENT_ID,
+        logout_uri: COGNITO_LOGOUT_URI
+    });
+
+    window.location.assign(
+        COGNITO_DOMAIN + "/logout?" + params.toString()
+    );
+}
+
+// Initialize authentication interface.
+updateAuthStatus(false);
+
+// Process Cognito authorization callback.
+handleCognitoCallback();
+</script> </body> </html>
