@@ -234,6 +234,45 @@ async function createPKCEChallenge(verifier) {
         .replace(/=/g, "");
 }
 
+
+async function checkBackendHealth() {
+    const memory = document.getElementById("memoryStatus");
+    const database = document.getElementById("dbStatus");
+
+    if (!accessToken) {
+        if (memory) memory.textContent = "OFFLINE";
+        if (database) database.textContent = "OFFLINE";
+        return;
+    }
+
+    try {
+        const response = await fetch(
+            "https://l1gy5oed6g.execute-api.ap-southeast-2.amazonaws.com/health",
+            {
+                method: "GET",
+                headers: {
+                    "Authorization": "Bearer " + accessToken
+                }
+            }
+        );
+
+        const result = await response.json();
+
+        if (memory) memory.textContent =
+            response.ok && result.memory === "ONLINE"
+                ? "ONLINE" : "ERROR";
+
+        if (database) database.textContent =
+            response.ok && result.supabase === "ONLINE"
+                ? "ONLINE" : "ERROR";
+
+    } catch (error) {
+        if (memory) memory.textContent = "ERROR";
+        if (database) database.textContent = "ERROR";
+        console.error("JARVIS health check failed:", error);
+    }
+}
+
 function updateAuthStatus(authenticated) {
     document.getElementById("authStatus").textContent =
         authenticated ? "AUTHENTICATED" : "NOT AUTHENTICATED";
@@ -338,6 +377,7 @@ async function handleCognitoCallback() {
         accessToken = tokens.access_token;
 
         updateAuthStatus(true);
+    checkBackendHealth();
 
         addMessage("Secure Cognito authentication successful, Sir.");
 
