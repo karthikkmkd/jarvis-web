@@ -134,31 +134,60 @@ footer { text-align: center; padding: 22px 10px; color: #426c80; font-size: 10px
             </div> <div class="metric"> <span>SUPABASE</span> <span id="dbStatus">PENDING</span> </div> <div class="metric"> 
                 <span>BACKEND</span> <span>READY TO TEST</span>
             </div> </div> </section> </main> <footer> STARK INDUSTRIES © 2026 | JARVIS MARK VII </footer> <script> const 
-API_URL = "https://l1gy5oed6g.execute-api.ap-southeast-2.amazonaws.com/chat"; let accessToken = null; let speechEnabled = 
+API_URL = "https://l1gy5oed6g.execute-api.ap-southeast-2.amazonaws.com/chat";
+const STREAM_URL = "https://4rnk558awb.execute-api.ap-southeast-2.amazonaws.com/prod/stream"; let accessToken = null; let speechEnabled = 
 true; const messages = document.getElementById("messages"); document.getElementById("systemStatus").textContent = "● INTERFACE ONLINE"; function addMessage(text, type = "jarvis") {
     const div = document.createElement("div"); div.className = "message " + type; div.textContent = (type === "user" ? "YOU: " : "JARVIS: ") + text;
     messages.appendChild(div); messages.scrollTop = messages.scrollHeight;
 }
-async function sendMessage() { const input = document.getElementById("message"); const message = input.value.trim(); if 
-    (!message) return; input.value = ""; addMessage(message, "user"); if (!accessToken) {
-        addMessage( "Sir, secure Cognito authentication has not been connected yet. Please complete the authentication configuration."
-        ); return;
+async function sendMessage() {
+    const input = document.getElementById("message");
+    const message = input.value.trim();
+    if (!message) return;
+    input.value = "";
+    addMessage(message, "user");
+
+    if (!accessToken) {
+        addMessage("Sir, secure Cognito authentication has not been connected yet.");
+        return;
     }
-    try { document.getElementById("apiStatus").textContent = "CONNECTING"; const response = await fetch(API_URL, { method: 
-            "POST", headers: {
-                "Content-Type": "application/json", "Authorization": "Bearer " + accessToken
+
+    try {
+        document.getElementById("apiStatus").textContent = "CONNECTING";
+        const response = await fetch(STREAM_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + accessToken
             },
-            body: JSON.stringify({ message: message })
+            body: JSON.stringify({message})
         });
-        if (response.status === 401) { throw new Error("Authentication expired or token rejected.");
+
+        if (!response.ok) throw new Error("Streaming HTTP " + response.status);
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        const replyDiv = document.createElement("div");
+        replyDiv.className = "message jarvis";
+        document.getElementById("messages").appendChild(replyDiv);
+
+        let reply = "";
+        while (true) {
+            const {value, done} = await reader.read();
+            if (done) break;
+            reply += decoder.decode(value, {stream: true});
+            replyDiv.textContent = reply;
         }
-        if (!response.ok) { throw new Error("Backend error: HTTP " + response.status);
-        }
-        const data = await response.json(); const reply = data.response || data.reply || data.message || "The backend responded, Sir.";
-        addMessage(reply); document.getElementById("apiStatus").textContent = "CONNECTED"; 
-        document.getElementById("aiStatus").textContent = "CONNECTED"; speak(reply);
+        reply += decoder.decode();
+        replyDiv.textContent = reply || "No response received, Sir.";
+        document.getElementById("apiStatus").textContent = "STREAM CONNECTED";
+        document.getElementById("aiStatus").textContent = "CONNECTED";
+        if (reply) speak(reply);
+
     } catch (error) {
-        document.getElementById("apiStatus").textContent = "ERROR"; addMessage(error.message);
+        console.error("Streaming error:", error);
+        addMessage("Streaming connection failed: " + error.message);
+        document.getElementById("apiStatus").textContent = "ERROR";
     }
 }
 function startVoice() { const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition; if 
