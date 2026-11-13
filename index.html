@@ -171,18 +171,52 @@ async function sendMessage() {
         replyDiv.className = "message jarvis";
         document.getElementById("messages").appendChild(replyDiv);
 
+        if ("speechSynthesis" in window) speechSynthesis.cancel();
+
         let reply = "";
+        let speechBuffer = "";
+
+        function queueReadyPhrases(final = false) {
+            let match;
+            while ((match = speechBuffer.match(/^([\\s\\S]*?[.!?])(?:\\s+|$)/))) {
+                const phrase = match[1].trim();
+                speechBuffer = speechBuffer.slice(match[0].length);
+                if (phrase) speak(phrase);
+            }
+
+            if (final && speechBuffer.trim()) {
+                speak(speechBuffer.trim());
+                speechBuffer = "";
+            } else if (speechBuffer.length >= 120) {
+                const cut = speechBuffer.lastIndexOf(" ", 120);
+                if (cut > 40) {
+                    speak(speechBuffer.slice(0, cut).trim());
+                    speechBuffer = speechBuffer.slice(cut + 1);
+                }
+            }
+        }
+
         while (true) {
             const {value, done} = await reader.read();
             if (done) break;
-            reply += decoder.decode(value, {stream: true});
+
+            const chunk = decoder.decode(value, {stream: true});
+            reply += chunk;
+            speechBuffer += chunk;
+
             replyDiv.textContent = reply;
+            queueReadyPhrases();
         }
-        reply += decoder.decode();
+
+        const remaining = decoder.decode();
+        reply += remaining;
+        speechBuffer += remaining;
         replyDiv.textContent = reply || "No response received, Sir.";
+
+        queueReadyPhrases(true);
+
         document.getElementById("apiStatus").textContent = "STREAM CONNECTED";
         document.getElementById("aiStatus").textContent = "CONNECTED";
-        if (reply) speak(reply);
 
     } catch (error) {
         console.error("Streaming error:", error);
@@ -206,8 +240,12 @@ function startVoice() { const SpeechRecognition = window.SpeechRecognition || wi
     };
     recognition.start();
 }
-function speak(text) { if (!speechEnabled || !("speechSynthesis" in window)) return; speechSynthesis.cancel(); const 
-    utterance = new SpeechSynthesisUtterance(text); utterance.lang = "en-IN"; utterance.rate = 0.95; utterance.pitch = 0.9; 
+function speak(text) {
+    if (!speechEnabled || !("speechSynthesis" in window) || !text.trim()) return;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-IN";
+    utterance.rate = 0.95;
+    utterance.pitch = 0.9;
     speechSynthesis.speak(utterance);
 }
 function toggleSpeech() { speechEnabled = !speechEnabled; if (!speechEnabled && "speechSynthesis" in window) { 
