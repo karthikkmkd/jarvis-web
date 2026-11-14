@@ -4,25 +4,57 @@ import android.app.*
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.speech.tts.TextToSpeech
 import com.openwakeword.OpenWakeWord
+import net.openid.appauth.AuthState
+import net.openid.appauth.AuthorizationService
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.io.IOException
+import java.util.Locale
+import java.util.concurrent.TimeUnit
 
-class WakeWordService : Service() {
+class WakeWordService : Service(), TextToSpeech.OnInitListener {
 
     private var detector: OpenWakeWord? = null
     private var speechRecognizer: SpeechRecognizer? = null
     private var isRecognizing = false
+    private var tts: TextToSpeech? = null
+    private var ttsReady = false
+    private var authService: AuthorizationService? = null
+    private val handler = Handler(Looper.getMainLooper())
+
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(0, TimeUnit.MILLISECONDS)
+        .build()
 
     companion object {
         private const val CHANNEL_ID = "jarvis_wake_channel"
         private const val NOTIFICATION_ID = 101
+        private const val STREAM_URL =
+            "https://4rnk558awb.execute-api.ap-southeast-2.amazonaws.com/prod/stream"
     }
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        tts = TextToSpeech(this, this)
+        authService = AuthorizationService(this)
+    }
+
+    override fun onInit(status: Int) {
+        if (status == TextToSpeech.SUCCESS) {
+            tts?.language = Locale("en", "IN")
+            ttsReady = true
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -48,7 +80,7 @@ class WakeWordService : Service() {
         if (isRecognizing) return
 
         detector?.start(
-            { score ->
+            {
                 if (!isRecognizing) {
                     saveStatus("HEY JARVIS DETECTED! Listening...")
                     showWakeNotification("Listening for your command...")
@@ -94,23 +126,26 @@ class WakeWordService : Service() {
                         ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         ?.firstOrNull()
 
-                    saveStatus(
-                        if (!words.isNullOrBlank()) "YOU SAID: $words"
-                        else "No speech recognized"
-                    )
+                    speechRecognizer?.destroy()
+                    speechRecognizer = null
 
-                    showWakeNotification(words ?: "No speech recognized")
-                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                        resumeWakeDetection()
-                    }, 3000)
+                    if (!words.isNullOrBlank()) {
+                        saveStatus("YOU SAID: $words")
+                        showWakeNotification("Sending your command...")
+                        sendToJarvis(words)
+                    } else {
+                        saveStatus("No speech recognized")
+                        speak("I didn't hear that. Please try again.")
+                        handler.postDelayed({ resumeWakeDetection() }, 3000)
+                    }
                 }
 
                 override fun onError(error: Int) {
-                    isRecognizing = false
                     speechRecognizer?.destroy()
                     speechRecognizer = null
                     saveStatus("SPEECH RECOGNITION ERROR: $error")
-                    showWakeNotification("Speech error code: $error")
+                    showWakeNotification("Speech error: $error")
+                    handler.postDelayed({ resumeWakeDetection() }, 2000)
                 }
 
                 override fun onRmsChanged(rmsdB: Float) {}
@@ -133,7 +168,173 @@ class WakeWordService : Service() {
 
         } catch (e: Exception) {
             saveStatus("Speech error: ${e.message}")
-            resumeWakeDetection()
+            handler.postDelayed({ resumeWakeDetection() }, 2000)
+        }
+    }
+
+    private fun sendToJarvis(message: String) {
+        val savedState = getSharedPreferences("jarvis_auth", MODE_PRIVATE)
+            .getString("authState", null)
+
+        if (savedState.isNullOrBlank()) {
+            saveStatus("Please login to JARVIS first")
+            speak("Please login to JARVIS first.")
+            handler.postDelayed({ resumeWakeDetection() }, 4000)
+            return
+        }
+
+        try {
+            val authState = AuthState.jsonDeserialize(savedState)
+
+            authState.performActionWithFreshTokens(authService!!) {
+                    accessToken, _, exception ->
+
+                getSharedPreferences("jarvis_auth", MODE_PRIVATE)
+                    .edit()
+                    .putString("authState", authState.jsonSerializeString())
+                    .apply()
+
+                if (exception != null || accessToken.isNullOrBlank()) {
+                    saveStatus("Authentication failed. Please login again.")
+                    speak("Authentication failed. Please login again.")
+                    handler.postDelayed({ resumeWakeDetection() }, 4000)
+                    return@performActionWithFreshTokens
+                }
+
+                streamResponse(message, accessToken)
+            }
+
+        } catch (e: Exception) {
+            saveStatus("Authentication error: ${e.message}")
+            speak("Please login to JARVIS again.")
+            handler.postDelayed({ resumeWakeDetection() }, 4000)
+        }
+    }
+
+    private fun streamResponse(message: String, token: String) {
+        val json = JSONObject()
+            .put("message", message)
+            .toString()
+
+        val body = json.toRequestBody(
+            "application/json; charset=utf-8".toMediaType()
+        )
+
+        val request = Request.Builder()
+            .url(STREAM_URL)
+            .post(body)
+            .header("Authorization", "Bearer $token")
+            .header("Content-Type", "application/json")
+            .build()
+
+        saveStatus("JARVIS is thinking...")
+        showWakeNotification("JARVIS is thinking...")
+
+        httpClient.newCall(request).enqueue(object : Callback {
+
+            override fun onFailure(call: Call, e: IOException) {
+                saveStatus("Network error: ${e.message}")
+                speak("I couldn't connect to the server.")
+                handler.postDelayed({ resumeWakeDetection() }, 4000)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    if (!it.isSuccessful) {
+                        saveStatus("AWS API error: ${it.code}")
+                        speak("The server returned an error.")
+                        handler.postDelayed({ resumeWakeDetection() }, 4000)
+                        return
+                    }
+
+                    val input = it.body?.byteStream()
+
+                    if (input == null) {
+                        saveStatus("Empty server response")
+                        handler.postDelayed({ resumeWakeDetection() }, 2000)
+                        return
+                    }
+
+                    saveStatus("JARVIS is responding...")
+
+                    try {
+                        val reader = input.bufferedReader()
+                        val buffer = CharArray(512)
+                        val pending = StringBuilder()
+                        var spoken = false
+
+                        while (true) {
+                            val count = reader.read(buffer)
+                            if (count == -1) break
+
+                            pending.append(buffer, 0, count)
+
+                            while (true) {
+                                val boundary = pending.indexOfAny(
+                                    charArrayOf('.', '!', '?', '\n')
+                                )
+
+                                if (boundary >= 0) {
+                                    val phrase = pending.substring(0, boundary + 1).trim()
+                                    pending.delete(0, boundary + 1)
+
+                                    if (phrase.isNotBlank()) {
+                                        speak(phrase)
+                                        spoken = true
+                                    }
+                                } else if (pending.length >= 100) {
+                                    val split = pending.lastIndexOf(" ", 100)
+                                    if (split > 0) {
+                                        val phrase = pending.substring(0, split).trim()
+                                        pending.delete(0, split + 1)
+                                        if (phrase.isNotBlank()) {
+                                            speak(phrase)
+                                            spoken = true
+                                        }
+                                    } else {
+                                        break
+                                    }
+                                } else {
+                                    break
+                                }
+                            }
+                        }
+
+                        val remaining = pending.toString().trim()
+                        if (remaining.isNotBlank()) {
+                            speak(remaining)
+                            spoken = true
+                        }
+
+                        saveStatus(
+                            if (spoken) "JARVIS response completed"
+                            else "JARVIS returned an empty response"
+                        )
+
+                        handler.postDelayed(
+                            { resumeWakeDetection() },
+                            2500
+                        )
+
+                    } catch (e: Exception) {
+                        saveStatus("Response error: ${e.message}")
+                        handler.postDelayed({ resumeWakeDetection() }, 3000)
+                    }
+                }
+            }
+        })
+    }
+
+    private fun speak(text: String) {
+        handler.post {
+            if (ttsReady) {
+                tts?.speak(
+                    text,
+                    TextToSpeech.QUEUE_ADD,
+                    null,
+                    "jarvis_${System.currentTimeMillis()}"
+                )
+            }
         }
     }
 
@@ -155,6 +356,7 @@ class WakeWordService : Service() {
                 "JARVIS Wake Detection",
                 NotificationManager.IMPORTANCE_HIGH
             )
+
             getSystemService(NotificationManager::class.java)
                 .createNotificationChannel(channel)
         }
@@ -180,7 +382,9 @@ class WakeWordService : Service() {
 
     private fun saveStatus(value: String) {
         getSharedPreferences("jarvis_status", MODE_PRIVATE)
-            .edit().putString("status", value).apply()
+            .edit()
+            .putString("status", value)
+            .apply()
     }
 
     private fun showWakeNotification(message: String) {
@@ -190,11 +394,15 @@ class WakeWordService : Service() {
 
     override fun onDestroy() {
         isRecognizing = false
+        httpClient.dispatcher.cancelAll()
         speechRecognizer?.destroy()
         speechRecognizer = null
         detector?.stop()
         detector?.release()
         detector = null
+        tts?.stop()
+        tts?.shutdown()
+        authService?.dispose()
         super.onDestroy()
     }
 
