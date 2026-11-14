@@ -100,7 +100,9 @@ class WakeWordService : Service() {
                     )
 
                     showWakeNotification(words ?: "No speech recognized")
-                    resumeWakeDetection()
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        resumeWakeDetection()
+                    }, 3000)
                 }
 
                 override fun onError(error: Int) {
