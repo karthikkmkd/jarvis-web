@@ -31,7 +31,7 @@ class WakeWordService : Service() {
         try {
             detector = OpenWakeWord.Builder(this)
                 .setModel(OpenWakeWord.BuiltInModel.HEY_JARVIS)
-                .setThreshold(0.5f)
+                .setThreshold(0.2f)
                 .build()
 
             detector?.start { score ->
