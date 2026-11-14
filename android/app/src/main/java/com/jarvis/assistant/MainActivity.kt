@@ -104,6 +104,11 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
 
         if (requestCode == authRequest) {
+            if (data == null) {
+                status.text = "JARVIS\n\nLogin cancelled."
+                return
+            }
+
             val response = AuthorizationResponse.fromIntent(data)
             val exception = AuthorizationException.fromIntent(data)
 
