@@ -25,7 +25,8 @@ class WakeWordService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, makeNotification("Listening for Hey JARVIS"))
+        startForeground(NOTIFICATION_ID, makeNotification("Starting wake detector..."))
+        saveStatus("Loading Hey JARVIS model...")
 
         try {
             detector = OpenWakeWord.Builder(this)
@@ -34,10 +35,14 @@ class WakeWordService : Service() {
                 .build()
 
             detector?.start { score ->
-                showWakeNotification("Hey JARVIS detected! Score: %.2f".format(score))
+                saveStatus("HEY JARVIS DETECTED! Score: %.2f".format(score))
+                showWakeNotification("Hey JARVIS detected!")
             }
+            saveStatus("LISTENING FOR HEY JARVIS")
+            showWakeNotification("Listening for Hey JARVIS")
         } catch (e: Exception) {
-            showWakeNotification("Wake detector error: ${e.message}")
+            saveStatus("ERROR: ${e.javaClass.simpleName}: ${e.message}")
+            showWakeNotification("Wake detector failed: ${e.message}")
         }
 
         return START_STICKY
@@ -71,6 +76,11 @@ class WakeWordService : Service() {
             .setOngoing(true)
             .setCategory(Notification.CATEGORY_SERVICE)
             .build()
+    }
+
+    private fun saveStatus(value: String) {
+        getSharedPreferences("jarvis_status", MODE_PRIVATE)
+            .edit().putString("status", value).apply()
     }
 
     private fun showWakeNotification(message: String) {
