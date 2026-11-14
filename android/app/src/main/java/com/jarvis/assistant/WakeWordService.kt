@@ -1,18 +1,19 @@
 package com.jarvis.assistant
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.app.Service
+import android.app.*
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import com.openwakeword.OpenWakeWord
 
 class WakeWordService : Service() {
 
     private var detector: OpenWakeWord? = null
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var isRecognizing = false
 
     companion object {
         private const val CHANNEL_ID = "jarvis_wake_channel"
@@ -34,22 +35,112 @@ class WakeWordService : Service() {
                 .setThreshold(0.5f)
                 .build()
 
-            detector?.start(
-                { score ->
-                    saveStatus("HEY JARVIS DETECTED! Score: %.2f".format(score))
-                    showWakeNotification("Hey JARVIS detected!")
-                },
-                { status ->
-                    saveStatus(status)
-                    showWakeNotification(status)
-                }
-            )
+            startWakeDetection()
         } catch (e: Exception) {
-            saveStatus("ERROR: ${e.javaClass.simpleName}: ${e.message}")
-            showWakeNotification("Wake detector failed: ${e.message}")
+            saveStatus("ERROR: ${e.message}")
+            showWakeNotification("Wake detector failed")
         }
 
         return START_STICKY
+    }
+
+    private fun startWakeDetection() {
+        if (isRecognizing) return
+
+        detector?.start(
+            { score ->
+                if (!isRecognizing) {
+                    saveStatus("HEY JARVIS DETECTED! Listening...")
+                    showWakeNotification("Listening for your command...")
+                    beginSpeechRecognition()
+                }
+            },
+            { status ->
+                saveStatus(status)
+                showWakeNotification(status)
+            }
+        )
+    }
+
+    private fun beginSpeechRecognition() {
+        detector?.stop()
+        isRecognizing = true
+
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            saveStatus("Speech recognition unavailable")
+            resumeWakeDetection()
+            return
+        }
+
+        try {
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+
+            speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+
+                override fun onReadyForSpeech(params: android.os.Bundle?) {
+                    saveStatus("JARVIS IS LISTENING...")
+                }
+
+                override fun onBeginningOfSpeech() {
+                    saveStatus("Hearing your command...")
+                }
+
+                override fun onEndOfSpeech() {
+                    saveStatus("Processing your command...")
+                }
+
+                override fun onResults(results: android.os.Bundle?) {
+                    val words = results
+                        ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        ?.firstOrNull()
+
+                    saveStatus(
+                        if (!words.isNullOrBlank()) "YOU SAID: $words"
+                        else "No speech recognized"
+                    )
+
+                    showWakeNotification(words ?: "No speech recognized")
+                    resumeWakeDetection()
+                }
+
+                override fun onError(error: Int) {
+                    saveStatus("Speech recognition error: $error")
+                    resumeWakeDetection()
+                }
+
+                override fun onRmsChanged(rmsdB: Float) {}
+                override fun onBufferReceived(buffer: ByteArray?) {}
+                override fun onPartialResults(partialResults: android.os.Bundle?) {}
+                override fun onEvent(eventType: Int, params: android.os.Bundle?) {}
+            })
+
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                )
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-IN")
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
+            }
+
+            speechRecognizer?.startListening(intent)
+
+        } catch (e: Exception) {
+            saveStatus("Speech error: ${e.message}")
+            resumeWakeDetection()
+        }
+    }
+
+    private fun resumeWakeDetection() {
+        if (!isRecognizing) return
+
+        isRecognizing = false
+        speechRecognizer?.destroy()
+        speechRecognizer = null
+
+        saveStatus("Restarting Hey JARVIS detection...")
+        startWakeDetection()
     }
 
     private fun createNotificationChannel() {
@@ -93,6 +184,9 @@ class WakeWordService : Service() {
     }
 
     override fun onDestroy() {
+        isRecognizing = false
+        speechRecognizer?.destroy()
+        speechRecognizer = null
         detector?.stop()
         detector?.release()
         detector = null
