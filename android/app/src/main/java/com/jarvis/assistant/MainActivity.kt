@@ -6,6 +6,9 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -15,12 +18,33 @@ class MainActivity : Activity() {
 
     private val microphoneRequest = 100
     private val authRequest = 200
+
     private lateinit var status: TextView
+    private lateinit var loginButton: Button
     private lateinit var authService: AuthorizationService
 
+    private val handler = Handler(Looper.getMainLooper())
+
+    private val statusUpdater = object : Runnable {
+        override fun run() {
+            val savedStatus = getSharedPreferences(
+                "jarvis_status", MODE_PRIVATE
+            ).getString("status", "HEY JARVIS LISTENING...")
+
+            if (::status.isInitialized && loginButton.visibility == View.GONE) {
+                status.text = "JARVIS ONLINE\n\n${savedStatus ?: "Listening..."}"
+            }
+
+            handler.postDelayed(this, 1000)
+        }
+    }
+
     private val clientId = "h78jmj9pr05oer6f2qao1gmph"
-    private val redirectUri = Uri.parse("com.jarvis.assistant:/oauth2redirect")
-    private val domain = "https://ap-southeast-2igtyzbczv.auth.ap-southeast-2.amazoncognito.com"
+    private val redirectUri =
+        Uri.parse("com.jarvis.assistant:/oauth2redirect")
+
+    private val domain =
+        "https://ap-southeast-2igtyzbczv.auth.ap-southeast-2.amazoncognito.com"
 
     private val serviceConfig = AuthorizationServiceConfiguration(
         Uri.parse("$domain/oauth2/authorize"),
@@ -33,11 +57,12 @@ class MainActivity : Activity() {
         authService = AuthorizationService(this)
 
         status = TextView(this).apply {
-            textSize = 20f
-            text = "JARVIS\n\nReady"
+            textSize = 23f
+            text = "JARVIS\n\nWelcome"
+            setPadding(0, 30, 0, 40)
         }
 
-        val loginButton = Button(this).apply {
+        loginButton = Button(this).apply {
             text = "LOGIN TO JARVIS"
             setOnClickListener { login() }
         }
@@ -51,30 +76,21 @@ class MainActivity : Activity() {
 
         setContentView(layout)
 
-        val savedState = getSharedPreferences("jarvis_auth", MODE_PRIVATE)
-            .getString("authState", null)
+        val savedState = getSharedPreferences(
+            "jarvis_auth", MODE_PRIVATE
+        ).getString("authState", null)
 
-        if (savedState != null) {
-            try {
-                val authState = AuthState.jsonDeserialize(savedState)
-                status.text = if (authState.isAuthorized) {
-                    "JARVIS\n\nLogged in"
-                } else {
-                    "JARVIS\n\nPlease login"
-                }
-            } catch (_: Exception) {
-                status.text = "JARVIS\n\nPlease login"
-            }
+        val loggedIn = try {
+            savedState != null &&
+                AuthState.jsonDeserialize(savedState).isAuthorized
+        } catch (_: Exception) {
+            false
         }
 
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
-            == PackageManager.PERMISSION_GRANTED) {
-            startWakeService()
+        if (loggedIn) {
+            enterJarvis()
         } else {
-            requestPermissions(
-                arrayOf(Manifest.permission.RECORD_AUDIO),
-                microphoneRequest
-            )
+            status.text = "JARVIS\n\nPlease login"
         }
     }
 
@@ -103,42 +119,67 @@ class MainActivity : Activity() {
     ) {
         super.onActivityResult(requestCode, resultCode, data)
 
-        if (requestCode == authRequest) {
-            if (data == null) {
-                status.text = "JARVIS\n\nLogin cancelled."
-                return
-            }
+        if (requestCode != authRequest) return
 
-            val response = AuthorizationResponse.fromIntent(data)
-            val exception = AuthorizationException.fromIntent(data)
+        if (data == null) {
+            status.text = "JARVIS\n\nLogin cancelled"
+            return
+        }
 
-            if (response != null) {
-                val authState = AuthState(serviceConfig)
-                authState.update(response, exception)
+        val response = AuthorizationResponse.fromIntent(data)
+        val exception = AuthorizationException.fromIntent(data)
 
-                authService.performTokenRequest(
-                    response.createTokenExchangeRequest()
-                ) { tokenResponse, tokenException ->
+        if (response == null) {
+            status.text = "JARVIS\n\nLogin failed"
+            return
+        }
 
-                    authState.update(tokenResponse, tokenException)
+        val authState = AuthState(serviceConfig)
+        authState.update(response, exception)
 
-                    getSharedPreferences("jarvis_auth", MODE_PRIVATE)
-                        .edit()
-                        .putString("authState", authState.jsonSerializeString())
-                        .apply()
+        authService.performTokenRequest(
+            response.createTokenExchangeRequest()
+        ) { tokenResponse, tokenException ->
 
-                    runOnUiThread {
-                        status.text = if (authState.isAuthorized) {
-                            "JARVIS\n\nLogin successful!"
-                        } else {
-                            "JARVIS\n\nLogin failed. Please try again."
-                        }
-                    }
+            authState.update(tokenResponse, tokenException)
+
+            getSharedPreferences("jarvis_auth", MODE_PRIVATE)
+                .edit()
+                .putString("authState", authState.jsonSerializeString())
+                .apply()
+
+            runOnUiThread {
+                if (authState.isAuthorized) {
+                    enterJarvis()
+                } else {
+                    status.text = "JARVIS\n\nLogin failed. Please try again."
                 }
-            } else {
-                status.text = "JARVIS\n\nLogin cancelled or failed."
             }
         }
+    }
+
+    private fun enterJarvis() {
+        loginButton.visibility = View.GONE
+        status.text = "JARVIS ONLINE\n\nStarting Hey JARVIS..."
+
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
+            == PackageManager.PERMISSION_GRANTED) {
+            startWakeService()
+        } else {
+            requestPermissions(
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+                microphoneRequest
+            )
+        }
+
+        handler.removeCallbacks(statusUpdater)
+        handler.post(statusUpdater)
+    }
+
+    private fun startWakeService() {
+        startForegroundService(
+            Intent(this, WakeWordService::class.java)
+        )
     }
 
     override fun onRequestPermissionsResult(
@@ -146,20 +187,22 @@ class MainActivity : Activity() {
         permissions: Array<out String>,
         grantResults: IntArray
     ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        super.onRequestPermissionsResult(
+            requestCode, permissions, grantResults
+        )
 
-        if (requestCode == microphoneRequest &&
-            grantResults.isNotEmpty() &&
-            grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            startWakeService()
+        if (requestCode == microphoneRequest) {
+            if (grantResults.isNotEmpty() &&
+                grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startWakeService()
+            } else {
+                status.text = "JARVIS ONLINE\n\nMicrophone permission required"
+            }
         }
     }
 
-    private fun startWakeService() {
-        startForegroundService(Intent(this, WakeWordService::class.java))
-    }
-
     override fun onDestroy() {
+        handler.removeCallbacks(statusUpdater)
         authService.dispose()
         super.onDestroy()
     }
