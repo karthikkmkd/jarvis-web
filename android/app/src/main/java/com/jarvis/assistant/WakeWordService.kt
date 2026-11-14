@@ -34,12 +34,16 @@ class WakeWordService : Service() {
                 .setThreshold(0.01f)
                 .build()
 
-            detector?.start { score ->
-                saveStatus("HEY JARVIS DETECTED! Score: %.2f".format(score))
-                showWakeNotification("Hey JARVIS detected!")
-            }
-            saveStatus("LISTENING FOR HEY JARVIS")
-            showWakeNotification("Listening for Hey JARVIS")
+            detector?.start(
+                { score ->
+                    saveStatus("HEY JARVIS DETECTED! Score: %.2f".format(score))
+                    showWakeNotification("Hey JARVIS detected!")
+                },
+                { status ->
+                    saveStatus(status)
+                    showWakeNotification(status)
+                }
+            )
         } catch (e: Exception) {
             saveStatus("ERROR: ${e.javaClass.simpleName}: ${e.message}")
             showWakeNotification("Wake detector failed: ${e.message}")
