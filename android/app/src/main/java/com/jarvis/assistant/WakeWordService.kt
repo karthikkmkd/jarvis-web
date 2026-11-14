@@ -104,8 +104,11 @@ class WakeWordService : Service() {
                 }
 
                 override fun onError(error: Int) {
-                    saveStatus("Speech recognition error: $error")
-                    resumeWakeDetection()
+                    isRecognizing = false
+                    speechRecognizer?.destroy()
+                    speechRecognizer = null
+                    saveStatus("SPEECH RECOGNITION ERROR: $error")
+                    showWakeNotification("Speech error code: $error")
                 }
 
                 override fun onRmsChanged(rmsdB: Float) {}
