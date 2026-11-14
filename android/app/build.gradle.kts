@@ -9,6 +9,7 @@ android {
 
     defaultConfig {
         applicationId = "com.jarvis.assistant"
+        manifestPlaceholders["appAuthRedirectScheme"] = "com.jarvis.assistant"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
