@@ -229,6 +229,7 @@ async function sendMessage() {
 async function startVoice() {
     addMessage("VOICE BUTTON CLICK DETECTED");
     document.getElementById("voiceStatus").textContent = "CLICKED";
+    addMessage("REALTIME ACTIVE CHECK: " + String(realtimeActive));
     if (realtimeActive) {
         stopRealtimeVoice();
         return;
