@@ -237,6 +237,8 @@ async function startVoice() {
 }
 
 async function startRealtimeVoice() {
+    document.getElementById("voiceStatus").textContent = "ENTERED";
+    addMessage("REALTIME FUNCTION ENTERED. TOKEN: " + (accessToken ? "AVAILABLE" : "MISSING"));
     if (!accessToken) {
         addMessage("Please sign in first to start JARVIS voice.");
         return;
