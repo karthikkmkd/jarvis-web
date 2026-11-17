@@ -30,4 +30,5 @@ dependencies {
     implementation(project(":openwakeword"))
     implementation("net.openid:appauth:0.11.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("io.github.webrtc-sdk:android:150.7871.04")
 }
