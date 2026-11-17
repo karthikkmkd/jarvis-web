@@ -135,7 +135,8 @@ footer { text-align: center; padding: 22px 10px; color: #426c80; font-size: 10px
                 <span>BACKEND</span> <span>READY TO TEST</span>
             </div> </div> </section> </main> <footer> STARK INDUSTRIES © 2026 | JARVIS MARK VII </footer> <script> const 
 API_URL = "https://l1gy5oed6g.execute-api.ap-southeast-2.amazonaws.com/chat";
-const STREAM_URL = "https://4rnk558awb.execute-api.ap-southeast-2.amazonaws.com/prod/stream"; let accessToken = null; let speechEnabled = 
+const STREAM_URL = "https://4rnk558awb.execute-api.ap-southeast-2.amazonaws.com/prod/stream";
+const REALTIME_TOKEN_URL = "https://4rnk558awb.execute-api.ap-southeast-2.amazonaws.com/prod/realtime-token"; let accessToken = null; let speechEnabled = 
 true; const messages = document.getElementById("messages"); document.getElementById("systemStatus").textContent = "● INTERFACE ONLINE"; function addMessage(text, type = "jarvis") {
     const div = document.createElement("div"); div.className = "message " + type; div.textContent = (type === "user" ? "YOU: " : "JARVIS: ") + text;
     messages.appendChild(div); messages.scrollTop = messages.scrollHeight;
@@ -224,22 +225,172 @@ async function sendMessage() {
         document.getElementById("apiStatus").textContent = "ERROR";
     }
 }
-function startVoice() { const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition; if 
-    (!SpeechRecognition) {
-        addMessage("Voice recognition is not supported in this browser. Please try Chrome."); return;
+
+async function startVoice() {
+    if (realtimeActive) {
+        stopRealtimeVoice();
+        return;
     }
-    const recognition = new SpeechRecognition(); recognition.lang = "en-IN"; recognition.interimResults = false; 
-    document.getElementById("reactor").classList.add("active"); document.getElementById("voiceStatus").textContent = 
-    "LISTENING"; recognition.onresult = function(event) {
-        document.getElementById("message").value = event.results[0][0].transcript; sendMessage();
-    };
-    recognition.onerror = function() { addMessage("Voice recognition encountered an error.");
-    };
-    recognition.onend = function() { document.getElementById("reactor").classList.remove("active"); 
-        document.getElementById("voiceStatus").textContent = "READY";
-    };
-    recognition.start();
+    await startRealtimeVoice();
 }
+
+async function startRealtimeVoice() {
+    if (!accessToken) {
+        addMessage("Please sign in first to start JARVIS voice.");
+        return;
+    }
+
+    try {
+        document.getElementById("voiceStatus").textContent = "CONNECTING";
+        document.getElementById("reactor").classList.add("active");
+
+        const tokenResponse = await fetch(REALTIME_TOKEN_URL, {
+            method: "POST",
+            headers: { "Authorization": "Bearer " + accessToken }
+        });
+
+        if (!tokenResponse.ok) {
+            throw new Error("Realtime token HTTP " + tokenResponse.status);
+        }
+
+        const tokenData = await tokenResponse.json();
+        if (!tokenData.value) throw new Error("Realtime session key missing");
+
+        realtimePC = new RTCPeerConnection();
+
+        realtimeAudio = document.createElement("audio");
+        realtimeAudio.autoplay = true;
+        realtimeAudio.playsInline = true;
+        realtimeAudio.muted = !speechEnabled;
+        document.body.appendChild(realtimeAudio);
+
+        realtimePC.ontrack = event => {
+            realtimeAudio.srcObject = event.streams[0];
+            realtimeAudio.play().catch(() => {});
+        };
+
+        realtimeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        realtimeStream.getTracks().forEach(track => realtimePC.addTrack(track, realtimeStream));
+
+        realtimeChannel = realtimePC.createDataChannel("oai-events");
+
+        realtimeChannel.onmessage = event => {
+            try {
+                const data = JSON.parse(event.data);
+
+                if (data.type === "conversation.item.input_audio_transcription.delta") {
+                    const id = data.item_id || "current";
+                    if (!realtimeUserMessages[id]) {
+                        realtimeUserMessages[id] = document.createElement("div");
+                        realtimeUserMessages[id].className = "message user";
+                        messages.appendChild(realtimeUserMessages[id]);
+                    }
+                    realtimeUserMessages[id].textContent =
+                        "YOU: " + (realtimeUserMessages[id]._text || "") + (data.delta || "");
+                    realtimeUserMessages[id]._text =
+                        (realtimeUserMessages[id]._text || "") + (data.delta || "");
+                    messages.scrollTop = messages.scrollHeight;
+                }
+
+                if (data.type === "conversation.item.input_audio_transcription.completed") {
+                    const id = data.item_id || "current";
+                    if (!realtimeUserMessages[id]) {
+                        realtimeUserMessages[id] = document.createElement("div");
+                        realtimeUserMessages[id].className = "message user";
+                        messages.appendChild(realtimeUserMessages[id]);
+                    }
+                    realtimeUserMessages[id]._text = data.transcript || realtimeUserMessages[id]._text || "";
+                    realtimeUserMessages[id].textContent = "YOU: " + realtimeUserMessages[id]._text;
+                    messages.scrollTop = messages.scrollHeight;
+                }
+
+                if (data.type === "response.output_audio_transcript.delta") {
+                    const id = data.response_id || "current";
+                    if (!realtimeAssistantMessages[id]) {
+                        realtimeAssistantMessages[id] = document.createElement("div");
+                        realtimeAssistantMessages[id].className = "message jarvis";
+                        messages.appendChild(realtimeAssistantMessages[id]);
+                    }
+                    realtimeAssistantMessages[id]._text =
+                        (realtimeAssistantMessages[id]._text || "") + (data.delta || "");
+                    realtimeAssistantMessages[id].textContent =
+                        "JARVIS: " + realtimeAssistantMessages[id]._text;
+                    messages.scrollTop = messages.scrollHeight;
+                }
+
+                if (data.type === "response.output_audio_transcript.done") {
+                    const id = data.response_id || "current";
+                    if (!realtimeAssistantMessages[id]) {
+                        realtimeAssistantMessages[id] = document.createElement("div");
+                        realtimeAssistantMessages[id].className = "message jarvis";
+                        messages.appendChild(realtimeAssistantMessages[id]);
+                    }
+                    realtimeAssistantMessages[id]._text = data.transcript || realtimeAssistantMessages[id]._text || "";
+                    realtimeAssistantMessages[id].textContent =
+                        "JARVIS: " + realtimeAssistantMessages[id]._text;
+                    messages.scrollTop = messages.scrollHeight;
+                }
+
+                if (data.type === "error") {
+                    console.error("Realtime event error:", data.error);
+                    addMessage("Realtime voice reported an error.");
+                }
+            } catch (error) {
+                console.error("Realtime event handling error:", error);
+            }
+        };
+
+        const offer = await realtimePC.createOffer();
+        await realtimePC.setLocalDescription(offer);
+
+        const sdpResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
+            method: "POST",
+            headers: {
+                "Authorization": "Bearer " + tokenData.value,
+                "Content-Type": "application/sdp"
+            },
+            body: offer.sdp
+        });
+
+        if (!sdpResponse.ok) {
+            throw new Error("Realtime connection HTTP " + sdpResponse.status);
+        }
+
+        const answerSdp = await sdpResponse.text();
+        await realtimePC.setRemoteDescription({ type: "answer", sdp: answerSdp });
+
+        realtimeActive = true;
+        document.getElementById("voiceStatus").textContent = "LISTENING";
+        addMessage("GPT Realtime voice connected. Speak naturally, Sir.");
+
+    } catch (error) {
+        console.error("Realtime startup error:", error);
+        addMessage("Voice connection failed: " + error.message);
+        stopRealtimeVoice();
+    }
+}
+
+function stopRealtimeVoice() {
+    if (realtimeStream) realtimeStream.getTracks().forEach(track => track.stop());
+    if (realtimeChannel) realtimeChannel.close();
+    if (realtimePC) realtimePC.close();
+    if (realtimeAudio) {
+        realtimeAudio.pause();
+        realtimeAudio.srcObject = null;
+        realtimeAudio.remove();
+    }
+
+    realtimePC = null;
+    realtimeStream = null;
+    realtimeChannel = null;
+    realtimeAudio = null;
+    realtimeActive = false;
+
+    document.getElementById("reactor").classList.remove("active");
+    document.getElementById("voiceStatus").textContent = "READY";
+    addMessage("Realtime voice disconnected.");
+}
+
 function speak(text) {
     if (!speechEnabled || !("speechSynthesis" in window) || !text.trim()) return;
     const utterance = new SpeechSynthesisUtterance(text);
@@ -248,9 +399,10 @@ function speak(text) {
     utterance.pitch = 0.9;
     speechSynthesis.speak(utterance);
 }
-function toggleSpeech() { speechEnabled = !speechEnabled; if (!speechEnabled && "speechSynthesis" in window) { 
-        speechSynthesis.cancel();
-    }
+function toggleSpeech() {
+    speechEnabled = !speechEnabled;
+    if (!speechEnabled && "speechSynthesis" in window) speechSynthesis.cancel();
+    if (realtimeAudio) realtimeAudio.muted = !speechEnabled;
     addMessage("Speech output " + (speechEnabled ? "enabled." : "disabled."));
 }
 function clearChat() { messages.innerHTML = ""; addMessage("Conversation display cleared, Sir.");
