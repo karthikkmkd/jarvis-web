@@ -112,7 +112,11 @@ class WakeWordService : Service() {
                 realtime?.fetchRealtimeToken(accessToken) { ephemeralToken ->
                     handler.post {
                         if (ephemeralToken.isNullOrBlank()) {
-                            failSession("Realtime token request failed")
+                            stopRealtime()
+                            handler.postDelayed({
+                                sessionActive = false
+                                startWakeDetection()
+                            }, 4000)
                             return@post
                         }
 
