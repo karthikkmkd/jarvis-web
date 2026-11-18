@@ -281,6 +281,5 @@ class RealtimeVoiceClient(
         peerConnection = null
         peerConnectionFactory = null
 
-        onStatus("Realtime client stopped")
     }
 }
