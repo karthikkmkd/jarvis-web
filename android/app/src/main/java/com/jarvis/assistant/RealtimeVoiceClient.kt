@@ -2,6 +2,8 @@ package com.jarvis.assistant
 
 import android.content.Context
 import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.IOException
 import org.webrtc.*
@@ -190,7 +192,7 @@ class RealtimeVoiceClient(
     ) {
         val request = Request.Builder()
             .url("https://api.openai.com/v1/realtime/calls")
-            .post(RequestBody.create(MediaType.parse("application/sdp"), offerSdp))
+            .post("application/sdp".toMediaType().let { offerSdp.toRequestBody(it) })
             .header("Authorization", "Bearer $ephemeralToken")
             .build()
 
