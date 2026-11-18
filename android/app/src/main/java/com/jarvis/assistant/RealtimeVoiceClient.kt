@@ -30,21 +30,30 @@ class RealtimeVoiceClient(
 
         httpClient.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                onStatus("Token request network error")
+                onStatus("Token network error: ${e.message}")
                 callback(null)
             }
 
             override fun onResponse(call: Call, response: Response) {
                 response.use {
+                    val responseBody = it.body?.string() ?: ""
+
                     if (!it.isSuccessful) {
-                        onStatus("Token request failed: ${it.code}")
+                        onStatus("Token HTTP ${it.code}: ${responseBody.take(300)}")
                         callback(null)
                         return
                     }
 
-                    val value = JSONObject(it.body?.string() ?: "{}")
+                    val value = JSONObject(responseBody.ifBlank { "{}" })
                         .optString("value", "")
-                    callback(value.takeIf { token -> token.isNotBlank() })
+
+                    if (value.isBlank()) {
+                        onStatus("Token response missing ephemeral token")
+                        callback(null)
+                        return
+                    }
+
+                    callback(value)
                 }
             }
         })
