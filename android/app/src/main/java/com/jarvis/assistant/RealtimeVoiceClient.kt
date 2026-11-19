@@ -64,6 +64,21 @@ class RealtimeVoiceClient(
     private var audioSource: AudioSource? = null
     private var audioTrack: AudioTrack? = null
     private var dataChannel: DataChannel? = null
+    private var pendingOfferCallback: ((String?) -> Unit)? = null
+    private var localDescriptionReady = false
+
+    private fun finishOffer(pc: PeerConnection?) {
+        val callback = pendingOfferCallback ?: return
+        pendingOfferCallback = null
+        val sdp = pc?.localDescription?.description
+        if (sdp.isNullOrBlank()) {
+            onStatus("Final local SDP is empty")
+            callback(null)
+        } else {
+            onStatus("ICE gathering complete; sending final SDP")
+            callback(sdp)
+        }
+    }
 
     fun initialize() {
         PeerConnectionFactory.initialize(
@@ -102,7 +117,12 @@ class RealtimeVoiceClient(
             }
 
             override fun onIceConnectionReceivingChange(receiving: Boolean) {}
-            override fun onIceGatheringChange(state: PeerConnection.IceGatheringState) {}
+            override fun onIceGatheringChange(state: PeerConnection.IceGatheringState) {
+                onEvent("ICE Gathering: $state")
+                if (state == PeerConnection.IceGatheringState.COMPLETE && localDescriptionReady) {
+                    finishOffer(peerConnection)
+                }
+            }
             override fun onIceCandidate(candidate: IceCandidate) {}
             override fun onIceCandidatesRemoved(candidates: Array<IceCandidate>) {}
             override fun onAddStream(stream: MediaStream) {}
@@ -168,16 +188,23 @@ class RealtimeVoiceClient(
 
         pc.createOffer(object : SdpObserver {
             override fun onCreateSuccess(offer: SessionDescription) {
+                pendingOfferCallback = callback
+                localDescriptionReady = false
                 pc.setLocalDescription(object : SdpObserver {
                     override fun onCreateSuccess(description: SessionDescription) {}
                     override fun onSetSuccess() {
-                        callback(offer.description)
+                        localDescriptionReady = true
+                        if (pc.iceGatheringState() == PeerConnection.IceGatheringState.COMPLETE) {
+                            finishOffer(pc)
+                        }
                     }
                     override fun onCreateFailure(error: String) {
+                        pendingOfferCallback = null
                         onStatus("Local SDP setup failed: $error")
                         callback(null)
                     }
                     override fun onSetFailure(error: String) {
+                        pendingOfferCallback = null
                         onStatus("Local SDP setup failed: $error")
                         callback(null)
                     }
@@ -186,6 +213,7 @@ class RealtimeVoiceClient(
 
             override fun onSetSuccess() {}
             override fun onCreateFailure(error: String) {
+                pendingOfferCallback = null
                 onStatus("SDP offer failed: $error")
                 callback(null)
             }
