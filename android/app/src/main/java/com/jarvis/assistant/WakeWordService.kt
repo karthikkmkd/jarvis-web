@@ -120,26 +120,30 @@ class WakeWordService : Service() {
                             return@post
                         }
 
-                        realtime?.initialize()
-                        realtime?.createPeerConnection()
-                        realtime?.createOffer { offer ->
-                            handler.post {
-                                if (offer.isNullOrBlank()) {
-                                    failSession("Failed to create SDP offer")
-                                    return@post
-                                }
+                        try {
+                            realtime?.initialize()
+                            realtime?.createPeerConnection()
+                            realtime?.createOffer { offer ->
+                                handler.post {
+                                    if (offer.isNullOrBlank()) {
+                                        failSession("Failed to create SDP offer")
+                                        return@post
+                                    }
 
-                                realtime?.connectToOpenAI(ephemeralToken, offer) { connected ->
-                                    handler.post {
-                                        if (connected) {
-                                            saveStatus("JARVIS Realtime connected. Speak now.")
-                                            showWakeNotification("Realtime conversation active")
-                                        } else {
-                                            failSession("Realtime connection failed")
+                                    realtime?.connectToOpenAI(ephemeralToken, offer) { connected ->
+                                        handler.post {
+                                            if (connected) {
+                                                saveStatus("JARVIS Realtime connected. Speak now.")
+                                                showWakeNotification("Realtime conversation active")
+                                            } else {
+                                                failSession("Realtime connection failed")
+                                            }
                                         }
                                     }
                                 }
                             }
+                        } catch (e: Exception) {
+                            failSession("WebRTC setup error: ${e.javaClass.simpleName}: ${e.message}")
                         }
                     }
                 }
