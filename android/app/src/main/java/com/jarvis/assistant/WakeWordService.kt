@@ -82,14 +82,14 @@ class WakeWordService : Service() {
             val authState = AuthState.jsonDeserialize(savedState)
 
             authState.performActionWithFreshTokens(authService!!) {
-                    _, idToken, exception ->
+                    accessToken, _, exception ->
 
                 getSharedPreferences("jarvis_auth", MODE_PRIVATE)
                     .edit()
                     .putString("authState", authState.jsonSerializeString())
                     .apply()
 
-                if (exception != null || idToken.isNullOrBlank()) {
+                if (exception != null || accessToken.isNullOrBlank()) {
                     failSession("Authentication failed. Please login again.")
                     return@performActionWithFreshTokens
                 }
@@ -109,7 +109,7 @@ class WakeWordService : Service() {
                     }
                 )
 
-                realtime?.fetchRealtimeToken(idToken) { ephemeralToken ->
+                realtime?.fetchRealtimeToken(accessToken) { ephemeralToken ->
                     handler.post {
                         if (ephemeralToken.isNullOrBlank()) {
                             stopRealtime()
