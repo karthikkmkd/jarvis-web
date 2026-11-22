@@ -103,7 +103,7 @@ class RealtimeVoiceClient(
             return
         }
 
-        val rtcConfig = PeerConnection.RTCConfiguration(emptyList()).apply {
+        val rtcConfig = PeerConnection.RTCConfiguration(listOf(PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer())).apply {
             sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
         }
 
@@ -235,14 +235,14 @@ class RealtimeVoiceClient(
 
         httpClient.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                onStatus("Realtime connection network error")
+                onStatus("Realtime network error: ${e.message}")
                 callback(false)
             }
 
             override fun onResponse(call: Call, response: Response) {
                 response.use {
                     if (!it.isSuccessful) {
-                        onStatus("Realtime connection failed: ${it.code}")
+                        onStatus("OpenAI HTTP ${it.code}: ${it.body?.string()?.take(500) ?: "No error body"}")
                         callback(false)
                         return
                     }
