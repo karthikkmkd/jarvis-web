@@ -146,13 +146,6 @@ class RealtimeVoiceClient(
             peerConnection?.addTrack(track, listOf("jarvis-audio"))
         }
 
-        peerConnection?.addTransceiver(
-            MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO,
-            RtpTransceiver.RtpTransceiverInit(
-                RtpTransceiver.RtpTransceiverDirection.RECV_ONLY
-            )
-        )
-
         val dcInit = DataChannel.Init()
         dataChannel = peerConnection?.createDataChannel("oai-events", dcInit)
 
