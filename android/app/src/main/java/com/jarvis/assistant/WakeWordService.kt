@@ -126,7 +126,10 @@ class WakeWordService : Service() {
                             realtime?.createOffer { offer ->
                                 handler.post {
                                     if (offer.isNullOrBlank()) {
-                                        failSession("Failed to create SDP offer")
+                                        val diagnostic = getSharedPreferences("jarvis_status", MODE_PRIVATE)
+                                            .getString("status", null)
+                                        failSession(diagnostic?.takeIf { it.startsWith("ICE TIMEOUT:") }
+                                            ?: "Failed to create SDP offer")
                                         return@post
                                     }
 

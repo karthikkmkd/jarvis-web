@@ -1,6 +1,8 @@
 package com.jarvis.assistant
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -66,8 +68,13 @@ class RealtimeVoiceClient(
     private var dataChannel: DataChannel? = null
     private var pendingOfferCallback: ((String?) -> Unit)? = null
     private var localDescriptionReady = false
+    private var gatheredCandidateCount = 0
+    private val iceHandler = Handler(Looper.getMainLooper())
+    private var iceTimeout: Runnable? = null
 
     private fun finishOffer(pc: PeerConnection?) {
+        iceTimeout?.let { iceHandler.removeCallbacks(it) }
+        iceTimeout = null
         val callback = pendingOfferCallback ?: return
         pendingOfferCallback = null
         val sdp = pc?.localDescription?.description
@@ -123,7 +130,10 @@ class RealtimeVoiceClient(
                     finishOffer(peerConnection)
                 }
             }
-            override fun onIceCandidate(candidate: IceCandidate) {}
+            override fun onIceCandidate(candidate: IceCandidate) {
+                gatheredCandidateCount++
+                onEvent("ICE candidate #$gatheredCandidateCount: ${candidate.sdpMid}")
+            }
             override fun onIceCandidatesRemoved(candidates: Array<IceCandidate>) {}
             override fun onAddStream(stream: MediaStream) {}
             override fun onRemoveStream(stream: MediaStream) {}
@@ -183,12 +193,25 @@ class RealtimeVoiceClient(
             override fun onCreateSuccess(offer: SessionDescription) {
                 pendingOfferCallback = callback
                 localDescriptionReady = false
+                gatheredCandidateCount = 0
                 pc.setLocalDescription(object : SdpObserver {
                     override fun onCreateSuccess(description: SessionDescription) {}
                     override fun onSetSuccess() {
                         localDescriptionReady = true
                         if (pc.iceGatheringState() == PeerConnection.IceGatheringState.COMPLETE) {
                             finishOffer(pc)
+                        } else {
+                            iceTimeout?.let { iceHandler.removeCallbacks(it) }
+                            val timeout = Runnable {
+                                val callbackOnTimeout = pendingOfferCallback
+                                if (callbackOnTimeout != null) {
+                                    pendingOfferCallback = null
+                                    onStatus("ICE TIMEOUT: state=${pc.iceGatheringState()}, candidates=$gatheredCandidateCount")
+                                    callbackOnTimeout(null)
+                                }
+                            }
+                            iceTimeout = timeout
+                            iceHandler.postDelayed(timeout, 12000)
                         }
                     }
                     override fun onCreateFailure(error: String) {
