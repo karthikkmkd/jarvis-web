@@ -241,7 +241,7 @@ class RealtimeVoiceClient(
     fun connectToOpenAI(
         ephemeralToken: String,
         offerSdp: String,
-        callback: (Boolean) -> Unit
+        callback: (Boolean, String?) -> Unit
     ) {
         val request = Request.Builder()
             .url("https://api.openai.com/v1/realtime/calls")
@@ -251,28 +251,30 @@ class RealtimeVoiceClient(
 
         httpClient.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                onStatus("Realtime network error: ${e.message}")
-                callback(false)
+                val error = "Realtime network error: ${e.message}"
+                onStatus(error)
+                callback(false, error)
             }
 
             override fun onResponse(call: Call, response: Response) {
                 response.use {
                     if (!it.isSuccessful) {
-                        onStatus("OpenAI HTTP ${it.code}: ${it.body?.string()?.take(500) ?: "No error body"}")
-                        callback(false)
+                        val error = "OpenAI HTTP ${it.code}: ${it.body?.string()?.take(500) ?: "No error body"}"
+                        onStatus(error)
+                        callback(false, error)
                         return
                     }
 
                     val answerSdp = it.body?.string()
                     if (answerSdp.isNullOrBlank()) {
                         onStatus("Empty SDP answer")
-                        callback(false)
+                        callback(false, "Empty SDP answer")
                         return
                     }
 
                     val pc = peerConnection ?: run {
                         onStatus("Peer connection unavailable")
-                        callback(false)
+                        callback(false, "Peer connection unavailable")
                         return
                     }
 
@@ -285,12 +287,12 @@ class RealtimeVoiceClient(
                         override fun onCreateSuccess(description: SessionDescription) {}
                         override fun onSetSuccess() {
                             onStatus("JARVIS Realtime connected")
-                            callback(true)
+                            callback(true, null)
                         }
                         override fun onCreateFailure(error: String) {}
                         override fun onSetFailure(error: String) {
                             onStatus("Remote SDP setup failed: $error")
-                            callback(false)
+                            callback(false, "Remote SDP setup failed: $error")
                         }
                     }, answer)
                 }

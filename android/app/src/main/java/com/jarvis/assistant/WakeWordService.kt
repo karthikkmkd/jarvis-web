@@ -133,13 +133,13 @@ class WakeWordService : Service() {
                                         return@post
                                     }
 
-                                    realtime?.connectToOpenAI(ephemeralToken, offer) { connected ->
+                                    realtime?.connectToOpenAI(ephemeralToken, offer) { connected, error ->
                                         handler.post {
                                             if (connected) {
                                                 saveStatus("JARVIS Realtime connected. Speak now.")
                                                 showWakeNotification("Realtime conversation active")
                                             } else {
-                                                failSession("Realtime connection failed")
+                                                failSession(error ?: "Realtime connection failed")
                                             }
                                         }
                                     }
